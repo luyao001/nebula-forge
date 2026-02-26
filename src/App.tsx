@@ -4,28 +4,61 @@ import { Send, Code, Eye, Cpu, Sparkles, MessageSquare, PanelLeftClose, Copy, Ch
 import "./App.css";
 
 const OLLAMA_API_URL = "http://localhost:11434/api/chat";
-const MODELS = ["qwen2.5-coder:14b-instruct-q4_K_M", "qwen2.5-coder:7b", "qwen2.5-coder:1.5b"];
+const OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"; // 🚀 新增：获取本地模型列表的接口
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState([{ role: "assistant", content: "星云锻造炉 Lite 已就绪。 \n\n已移除多余按键，代码实时同步与高亮逻辑已重构。" }]);
+  const [messages, setMessages] = useState([{ 
+    role: "assistant", 
+    content: "星云锻造炉已就绪。\n\n已开启本地模型自动探测探测。请确保 Ollama 已启动，并在下拉菜单中选择你的模型。" 
+  }]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"code" | "preview">("code");
   const [generatedCode, setGeneratedCode] = useState("");
   const [currentLanguage, setCurrentLanguage] = useState("html");
-  const [currentModel, setCurrentModel] = useState(MODELS[0]);
+  
+  // 🚀 动态模型状态
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [currentModel, setCurrentModel] = useState("");
+  const [isOllamaRunning, setIsOllamaRunning] = useState(true);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamBuffer = useRef("");
 
+  // 🚀 核心新增：软件启动时，自动扫描本地 Ollama 模型
+  useEffect(() => {
+    const fetchLocalModels = async () => {
+      try {
+        const response = await fetch(OLLAMA_TAGS_URL);
+        if (!response.ok) throw new Error("Ollama not responding");
+        
+        const data = await response.json();
+        const models = data.models.map((m: any) => m.name); // 提取模型名称
+        
+        setAvailableModels(models);
+        if (models.length > 0) {
+          setCurrentModel(models[0]); // 默认选中第一个本地模型
+        }
+        setIsOllamaRunning(true);
+      } catch (error) {
+        console.error("无法连接到本地 Ollama:", error);
+        setIsOllamaRunning(false);
+        setAvailableModels([]);
+      }
+    };
+
+    fetchLocalModels();
+  }, []); // 仅在启动时运行一次
+
   // 自动滚动到底部
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  // 🚀 实时同步逻辑：即使代码没写完，只要有 ``` 就开始提取
+  // 实时同步逻辑
   const extractCodeStreaming = (text: string) => {
     const regex = /```(\w*)\n?([\s\S]*?)(?:```|$)/;
     const match = text.match(regex);
@@ -35,7 +68,6 @@ export default function App() {
     return null;
   };
 
-  // 🚀 纯净复制逻辑
   const handleCopy = async () => {
     if (!generatedCode) return;
     await navigator.clipboard.writeText(generatedCode);
@@ -44,7 +76,9 @@ export default function App() {
   };
 
   const handleSend = async () => {
-    if (!prompt.trim() || isLoading) return;
+    // 如果没有输入、正在加载，或者【没有检测到模型】，则拒绝发送
+    if (!prompt.trim() || isLoading || !currentModel) return;
+    
     const userMsg = { role: "user", content: prompt };
     setMessages(prev => [...prev, userMsg, { role: "assistant", content: "" }]);
     setPrompt("");
@@ -55,7 +89,7 @@ export default function App() {
       const response = await fetch(OLLAMA_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: currentModel, messages: [...messages, userMsg], stream: true })
+        body: JSON.stringify({ model: currentModel, messages: [...messages.filter(m => m.content), userMsg], stream: true })
       });
 
       const reader = response.body?.getReader();
@@ -73,18 +107,15 @@ export default function App() {
             if (json.message?.content) {
               streamBuffer.current += json.message.content;
               
-              // 同步左侧对话框
               setMessages(prev => {
                 const newMsgs = [...prev];
                 newMsgs[newMsgs.length - 1].content = streamBuffer.current;
                 return newMsgs;
               });
 
-              // 🚀 实时同步到右侧编辑器
               const result = extractCodeStreaming(streamBuffer.current);
               if (result) {
                 setGeneratedCode(result.code);
-                // 自动识别语言切换高亮
                 const lang = result.lang.toLowerCase();
                 if (lang.includes('py') && currentLanguage !== 'python') setCurrentLanguage('python');
                 else if ((lang.includes('html') || lang === '') && currentLanguage !== 'html') setCurrentLanguage('html');
@@ -95,7 +126,11 @@ export default function App() {
         }
       }
     } catch (error) { 
-        console.error("请求失败:", error);
+        setMessages(prev => {
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1].content = "⚠️ 连接 Ollama 失败，请检查模型服务是否启动。";
+          return newMsgs;
+        });
     } finally { 
         setIsLoading(false); 
     }
@@ -124,7 +159,6 @@ export default function App() {
             </button>
           </div>
           <div className="nf-action-group">
-            {/* 🚀 复制键：带成功反馈动画 */}
             <button className="nf-btn-copy" onClick={handleCopy}>
               {isCopied ? <Check size={16} color="#10b981" /> : <Copy size={16} />}
               <span>{isCopied ? "已复制" : "复制代码"}</span>
@@ -139,12 +173,30 @@ export default function App() {
             <div className="nf-section"><MessageSquare size={14} /> <span>当前任务</span></div>
             <div className="nf-history-item active">index.workspace</div>
             <div className="nf-sidebar-spacer"></div>
+            
+            {/* 🚀 动态模型下拉菜单 */}
             <div className="nf-model-box">
               <div className="nf-model-label"><Cpu size={12} /> ENGINE</div>
-              <select value={currentModel} onChange={(e) => setCurrentModel(e.target.value)}>
-                {MODELS.map(m => <option key={m} value={m}>{m.split(':')[0]}</option>)}
+              <select 
+                value={currentModel} 
+                onChange={(e) => setCurrentModel(e.target.value)}
+                disabled={!isOllamaRunning || availableModels.length === 0}
+                style={{
+                  background: 'rgba(0,0,0,0.5)', border: '1px solid #27272a', 
+                  color: !isOllamaRunning ? '#ef4444' : '#fafafa', 
+                  padding: '8px', borderRadius: '6px', width: '100%', outline: 'none'
+                }}
+              >
+                {!isOllamaRunning ? (
+                  <option value="">⚠️ 未连接 Ollama</option>
+                ) : availableModels.length === 0 ? (
+                  <option value="">📥 请先拉取模型</option>
+                ) : (
+                  availableModels.map(m => <option key={m} value={m}>{m}</option>)
+                )}
               </select>
             </div>
+
           </div>
         </aside>
 
@@ -154,7 +206,7 @@ export default function App() {
               {messages.map((msg, i) => (
                 <div key={i} className={`v3-msg ${msg.role}`}>
                   <div className="v3-avatar">{msg.role === 'user' ? 'ME' : 'NF'}</div>
-                  <div className="nf-content">{msg.content}</div>
+                  <div className="nf-content" style={{whiteSpace: 'pre-wrap'}}>{msg.content}</div>
                 </div>
               ))}
             </div>
@@ -164,9 +216,10 @@ export default function App() {
                     value={prompt} 
                     onChange={e => setPrompt(e.target.value)} 
                     onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()} 
-                    placeholder="在此输入你的构想..." 
+                    placeholder={!currentModel ? "请先在左侧选择模型..." : "在此输入你的构想..."} 
+                    disabled={!currentModel}
                   />
-                  <button className="nf-send-btn" onClick={handleSend} disabled={isLoading}>
+                  <button className="nf-send-btn" onClick={handleSend} disabled={isLoading || !currentModel}>
                     <Send size={18} />
                   </button>
                 </div>
