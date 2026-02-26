@@ -1,0 +1,86 @@
+:root {
+  --bg-dark: #09090b;
+  --bg-panel: #121215;
+  --border: #27272a;
+  --accent: #a855f7;
+  --text-main: #fafafa;
+  --text-dim: #71717a;
+}
+
+body { margin: 0; background: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; overflow: hidden; }
+
+/* 整体容器 */
+.nf-app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+/* 顶部导航 - 关键适配 */
+.nf-header { 
+  height: 64px; border-bottom: 1px solid var(--border); background: #000;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.nf-header-left { display: flex; align-items: center; gap: 16px; }
+.nf-toggle-btn { background: transparent; border: none; color: var(--text-dim); cursor: pointer; padding: 8px; border-radius: 6px; }
+.nf-toggle-btn:hover { background: #1a1a1a; color: #fff; }
+.nf-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+
+.nf-header-right { display: flex; align-items: center; gap: 12px; }
+
+/* 选项卡组 */
+.nf-tab-group { 
+  display: flex; background: #18181b; padding: 4px; border-radius: 8px; border: 1px solid var(--border);
+}
+.nf-tab-group button { 
+  border: none; background: transparent; color: var(--text-dim); 
+  padding: 6px 12px; font-size: 13px; display: flex; align-items: center; gap: 6px;
+  cursor: pointer; border-radius: 6px; transition: 0.2s;
+}
+.nf-tab-group button.active { background: #27272a; color: #fff; }
+
+/* 动作组 */
+.nf-action-group { display: flex; align-items: center; gap: 8px; }
+.nf-btn-ghost { background: transparent; border: 1px solid var(--border); color: #fff; padding: 8px; border-radius: 8px; cursor: pointer; }
+.nf-btn-ghost:hover { background: #27272a; }
+.nf-btn-deploy { 
+  background: var(--accent); border: none; color: #fff; padding: 8px 16px; 
+  border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+
+/* 侧边栏 */
+.nf-body { flex: 1; display: flex; overflow: hidden; }
+.nf-sidebar { width: 260px; background: var(--bg-panel); border-right: 1px solid var(--border); transition: 0.3s ease; flex-shrink: 0; }
+.nf-sidebar.closed { width: 0; border: none; }
+.nf-sidebar-inner { width: 260px; height: 100%; display: flex; flex-direction: column; padding: 16px; box-sizing: border-box; }
+
+.nf-section { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.nf-history-item { padding: 10px 12px; border-radius: 8px; font-size: 14px; color: #fff; background: #1a1a1a; border: 1px solid var(--border); }
+.nf-sidebar-spacer { flex: 1; }
+
+.nf-model-box { background: #000; padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+.nf-model-label { font-size: 10px; color: var(--text-dim); margin-bottom: 6px; letter-spacing: 1px; }
+select { width: 100%; background: transparent; color: #fff; border: none; font-size: 13px; outline: none; }
+
+/* 聊天区 */
+.nf-workspace { flex: 1; display: flex; min-width: 0; }
+.nf-chat { width: 380px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0; }
+.nf-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.nf-msg { display: flex; gap: 12px; }
+.nf-avatar { width: 32px; height: 32px; border-radius: 8px; background: #27272a; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; }
+.nf-msg.user .nf-avatar { background: var(--accent); }
+.nf-content { font-size: 14px; line-height: 1.6; color: #d4d4d8; white-space: pre-wrap; word-break: break-word; }
+
+.nf-input-container { padding: 20px; border-top: 1px solid var(--border); }
+.nf-input-wrapper { position: relative; background: #000; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+textarea { width: 100%; height: 80px; background: transparent; color: #fff; border: none; outline: none; resize: none; font-family: inherit; }
+.nf-send-btn { position: absolute; right: 12px; bottom: 12px; background: var(--accent); color: #fff; border: none; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; }
+
+/* 预览区 */
+.nf-viewport { flex: 1; background: #000; padding: 16px; min-width: 0; }
+.nf-frame-container { height: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
+iframe { width: 100%; height: 100%; border: none; }
+
+/* 小窗口适配方案 */
+@media (max-width: 1100px) {
+  .nf-chat { width: 300px; }
+  .hide-sm { display: none; }
+}
