@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import Editor from "@monaco-editor/react";
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { Send, Code, Eye, Download, Cpu, Sparkles, Layout, MessageSquare, PanelLeftClose, Rocket } from 'lucide-react';
+import { Send, Code, Eye, Cpu, Sparkles, MessageSquare, PanelLeftClose, Copy, Check } from 'lucide-react';
 import "./App.css";
 
 const OLLAMA_API_URL = "http://localhost:11434/api/chat";
@@ -10,38 +8,39 @@ const MODELS = ["qwen2.5-coder:14b-instruct-q4_K_M", "qwen2.5-coder:7b", "qwen2.
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState([{ role: "assistant", content: "星云锻造炉已升级至极致适配版。 \n\n右上角现在集成了部署、保存、预览功能，尝试调整窗口大小看看。" }]);
+  const [messages, setMessages] = useState([{ role: "assistant", content: "星云锻造炉 Lite 已就绪。 \n\n已移除多余按键，代码实时同步与高亮逻辑已重构。" }]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"code" | "preview">("code");
   const [generatedCode, setGeneratedCode] = useState("");
+  const [currentLanguage, setCurrentLanguage] = useState("html");
   const [currentModel, setCurrentModel] = useState(MODELS[0]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isCopied, setIsCopied] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamBuffer = useRef("");
 
+  // 自动滚动到底部
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  const extractCode = (text: string) => {
-    const match = text.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
-    return match ? match[1].trim() : null;
+  // 🚀 实时同步逻辑：即使代码没写完，只要有 ``` 就开始提取
+  const extractCodeStreaming = (text: string) => {
+    const regex = /```(\w*)\n?([\s\S]*?)(?:```|$)/;
+    const match = text.match(regex);
+    if (match) {
+      return { lang: match[1] || "html", code: match[2] };
+    }
+    return null;
   };
 
-  const handleDeploy = async () => {
+  // 🚀 纯净复制逻辑
+  const handleCopy = async () => {
     if (!generatedCode) return;
     await navigator.clipboard.writeText(generatedCode);
-    alert("🚀 代码已成功复制！即将跳转 Vercel。");
-    window.open("https://vercel.com/new", "_blank");
-  };
-
-  const handleSave = async () => {
-    if (!generatedCode) return;
-    try {
-      const path = await save({ filters: [{ name: 'HTML', extensions: ['html'] }], defaultPath: 'nebula_project.html' });
-      if (path) { await writeTextFile(path, generatedCode); }
-    } catch (err) { console.error(err); }
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000); 
   };
 
   const handleSend = async () => {
@@ -73,18 +72,33 @@ export default function App() {
             const json = JSON.parse(line);
             if (json.message?.content) {
               streamBuffer.current += json.message.content;
+              
+              // 同步左侧对话框
               setMessages(prev => {
                 const newMsgs = [...prev];
                 newMsgs[newMsgs.length - 1].content = streamBuffer.current;
                 return newMsgs;
               });
-              const code = extractCode(streamBuffer.current);
-              if (code) setGeneratedCode(code);
+
+              // 🚀 实时同步到右侧编辑器
+              const result = extractCodeStreaming(streamBuffer.current);
+              if (result) {
+                setGeneratedCode(result.code);
+                // 自动识别语言切换高亮
+                const lang = result.lang.toLowerCase();
+                if (lang.includes('py') && currentLanguage !== 'python') setCurrentLanguage('python');
+                else if ((lang.includes('html') || lang === '') && currentLanguage !== 'html') setCurrentLanguage('html');
+                else if (lang.includes('js') && currentLanguage !== 'javascript') setCurrentLanguage('javascript');
+              }
             }
           } catch (e) { }
         }
       }
-    } catch (error) { console.error(error); } finally { setIsLoading(false); }
+    } catch (error) { 
+        console.error("请求失败:", error);
+    } finally { 
+        setIsLoading(false); 
+    }
   };
 
   return (
@@ -110,11 +124,10 @@ export default function App() {
             </button>
           </div>
           <div className="nf-action-group">
-            <button className="nf-btn-ghost" onClick={handleSave} title="保存项目">
-              <Download size={16} />
-            </button>
-            <button className="nf-btn-deploy" onClick={handleDeploy} title="一键部署">
-              <Rocket size={16} /> <span>部署</span>
+            {/* 🚀 复制键：带成功反馈动画 */}
+            <button className="nf-btn-copy" onClick={handleCopy}>
+              {isCopied ? <Check size={16} color="#10b981" /> : <Copy size={16} />}
+              <span>{isCopied ? "已复制" : "复制代码"}</span>
             </button>
           </div>
         </div>
@@ -123,13 +136,9 @@ export default function App() {
       <main className="nf-body">
         <aside className={`nf-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
           <div className="nf-sidebar-inner">
-            <div className="nf-section">
-              <MessageSquare size={14} /> <span>对话历史</span>
-            </div>
-            <div className="nf-history-item active">当前锻造项目</div>
-            
+            <div className="nf-section"><MessageSquare size={14} /> <span>当前任务</span></div>
+            <div className="nf-history-item active">index.workspace</div>
             <div className="nf-sidebar-spacer"></div>
-            
             <div className="nf-model-box">
               <div className="nf-model-label"><Cpu size={12} /> ENGINE</div>
               <select value={currentModel} onChange={(e) => setCurrentModel(e.target.value)}>
@@ -143,31 +152,43 @@ export default function App() {
           <div className="nf-chat">
             <div className="nf-messages" ref={scrollRef}>
               {messages.map((msg, i) => (
-                <div key={i} className={`nf-msg ${msg.role}`}>
-                  <div className="nf-avatar">{msg.role === 'user' ? 'ME' : 'NF'}</div>
+                <div key={i} className={`v3-msg ${msg.role}`}>
+                  <div className="v3-avatar">{msg.role === 'user' ? 'ME' : 'NF'}</div>
                   <div className="nf-content">{msg.content}</div>
                 </div>
               ))}
             </div>
             <div className="nf-input-container">
-              <div className="nf-input-wrapper">
-                <textarea 
-                  value={prompt} 
-                  onChange={e => setPrompt(e.target.value)} 
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()} 
-                  placeholder="输入你的构想..." 
-                />
-                <button className="nf-send-btn" onClick={handleSend} disabled={isLoading}>
-                  <Send size={18} />
-                </button>
-              </div>
+                <div className="nf-input-wrapper">
+                  <textarea 
+                    value={prompt} 
+                    onChange={e => setPrompt(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()} 
+                    placeholder="在此输入你的构想..." 
+                  />
+                  <button className="nf-send-btn" onClick={handleSend} disabled={isLoading}>
+                    <Send size={18} />
+                  </button>
+                </div>
             </div>
           </div>
 
           <div className="nf-viewport">
             <div className="nf-frame-container">
               {activeTab === 'code' ? (
-                <Editor height="100%" defaultLanguage="html" theme="vs-dark" value={generatedCode} options={{ fontSize: 13, minimap: { enabled: false } }} />
+                <Editor 
+                    height="100%" 
+                    language={currentLanguage} 
+                    theme="vs-dark" 
+                    value={generatedCode} 
+                    options={{ 
+                        fontSize: 13, 
+                        minimap: { enabled: false },
+                        readOnly: isLoading,
+                        wordWrap: 'on',
+                        padding: { top: 15 }
+                    }} 
+                />
               ) : (
                 <iframe srcDoc={generatedCode} title="preview" />
               )}
